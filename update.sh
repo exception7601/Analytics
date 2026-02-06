@@ -19,7 +19,7 @@ mkdir -p "$OUTPUT_DIR"
 echo "Latest Firebase Version: $VERSION"
 
 curl -LO "https://github.com/$REPO/releases/download/$VERSION/Firebase.zip"
-unzip -o Firebase.zip -d "$OUTPUT_DIR"
+unzip -qo Firebase.zip -d "$OUTPUT_DIR"
 rm Firebase.zip
 
 BINARY_TARGETS=""
@@ -35,7 +35,7 @@ package() {
     find "$xc" -maxdepth 1 -mindepth 1 -type d -name "*maccatalyst*" -exec rm -rf {} +
   done
 
-  (cd "$name" && zip -rq "$zip_path" .)
+  (cd "$name" && zip -r "$zip_path" .)
 
   local sum
   sum=$(sha256sum "$zip_path")
