@@ -2,6 +2,7 @@
 
 set -e
 
+ROOT_DIR="$(pwd)"
 REPO="firebase/firebase-ios-sdk"
 MY_REPO="exception7601/Analytics"
 VERSION=$(gh release list --repo $REPO --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
