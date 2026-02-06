@@ -66,7 +66,9 @@ RELEASE_NOTES="SPM binaryTargets
 $BINARY_TARGETS
 \`\`\`"
 
-echo "$VERSION" >version
+BUILD=$(date +%s)
+echo "$VERSION.$BUILD" >version
+
 git add version
 git commit -m "v$VERSION"
 
