@@ -1,51 +1,74 @@
-MY_REPO=exception7601/Analytics
-BUILD_COMMIT=$(git log --oneline --abbrev=16 --pretty=format:"%h" -1)
-JSON_FILE="Carthage/FirebaseAnalyticsBinary.json"
-NEW_NAME=FirebaseAnalyticsBinary-${BUILD_COMMIT}.zip
-NAME_FILE=FirebaseAnalyticsBinary.json
-URL_CARTHAGE="https://dl.google.com/dl/firebase/ios/carthage/FirebaseAnalyticsBinary.json"
+#!/bin/bash
 
-curl -L -o "$NAME_FILE" "$URL_CARTHAGE"
-VERSION=$(jq -r 'keys | max_by(split(".") | map(tonumber))' $NAME_FILE)
-URL_FRAMEWORK=$(jq -r --arg v "$VERSION" '.[$v]' "$NAME_FILE")
+set -e
 
-echo ${VERSION}
+REPO="firebase/firebase-ios-sdk"
+MY_REPO="exception7601/Analytics"
+VERSION=$(gh release list --repo $REPO --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+OUTPUT_DIR="$(pwd)/.output"
+FB_DIR="$OUTPUT_DIR/Firebase"
 
-curl -L -o "$NEW_NAME" "$URL_FRAMEWORK"
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
 
-SUM=$(swift package compute-checksum ${NEW_NAME} )
-DOWNLOAD_URL="https://github.com/${MY_REPO}/releases/download/${VERSION}/${NEW_NAME}"
+echo "Latest Firebase Version: $VERSION"
 
-if [ ! -f $JSON_FILE ]; then
-  echo "{}" > $JSON_FILE
-fi
+curl -LO "https://github.com/$REPO/releases/download/$VERSION/Firebase.zip"
+unzip -o Firebase.zip -d "$OUTPUT_DIR"
+rm Firebase.zip
 
-JSON_CARTHAGE="$(jq --arg version "${VERSION}" --arg url "${DOWNLOAD_URL}" '. + { ($version): $url }' $JSON_FILE)" 
-echo $JSON_CARTHAGE > $JSON_FILE
+BINARY_TARGETS=""
+ZIPS=()
 
-NOTES=$(cat <<END
-Carthage
-\`\`\`
-binary "https://raw.githubusercontent.com/${MY_REPO}/main/${JSON_FILE}"
-\`\`\`
+package() {
+  local name=$1
+  local zip_path="$OUTPUT_DIR/$name.zip"
+  echo "Packaging $name..."
 
-Install
-\`\`\`
-carthage bootstrap --use-xcframeworks
-\`\`\`
-END
-)
-echo "${NOTES}"
+  find "$name" -name "*.xcframework" -type d | while read -r xc; do
+    find "$xc" -maxdepth 1 -mindepth 1 -type d ! -name "*ios*" -exec rm -rf {} +
+    find "$xc" -maxdepth 1 -mindepth 1 -type d -name "*maccatalyst*" -exec rm -rf {} +
+  done
 
-BUILD=$(date +%s)
-NEW_VERSION=${VERSION}
+  (cd "$name" && zip -rq "$zip_path" .)
 
-# echo ${NEW_VERSION} > version
-git add $JSON_FILE
-git commit -m "new Version ${NEW_VERSION}"
-git tag -s -a ${NEW_VERSION} -m "v${NEW_VERSION}"
-# git checkout -b release-v${NEW_VERSION}
+  local sum
+  sum=$(sha256sum "$zip_path")
+  sum=${sum%% *}
+
+  [ -n "$BINARY_TARGETS" ] && BINARY_TARGETS+=",\\n\\n"
+  BINARY_TARGETS+=".binaryTarget(
+    name: \"$name\",
+    url: \"https://github.com/$MY_REPO/releases/download/$VERSION/$name.zip\",
+    checksum: \"$sum\"
+)"
+  ZIPS+=("$zip_path")
+}
+
+cd "$FB_DIR"
+
+cp "module.modulemap" "FirebaseAnalytics/"
+cp "Firebase.h" "FirebaseAnalytics/"
+
+package "FirebaseAnalytics"
+package "FirebaseRemoteConfig"
+
+cd "$ROOT_DIR"
+
+RELEASE_NOTES="SPM binaryTargets
+
+\`\`\`swift
+$BINARY_TARGETS
+\`\`\`"
+
+echo "$VERSION" >version
+git add version
+git commit -m "v$VERSION"
+
+git tag -a "$VERSION" -m "v$VERSION"
 git push origin HEAD --tags
 
-gh release create ${NEW_VERSION} ${NEW_NAME} --notes "${NOTES}"
+echo "Creating release $VERSION..."
+gh release create "$VERSION" "${ZIPS[@]}" --notes "$(echo -e "$RELEASE_NOTES")"
 
+echo "Done."
