@@ -5,6 +5,10 @@ set -e
 REPO="firebase/firebase-ios-sdk"
 MY_REPO="exception7601/Analytics"
 VERSION=$(gh release list --repo $REPO --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+if git rev-parse "${VERSION}" >/dev/null 2>&1; then
+  echo "Version ${VERSION} already exists. No update needed."
+  exit 0
+fi
 OUTPUT_DIR="$(pwd)/.output"
 FB_DIR="$OUTPUT_DIR/Firebase"
 
