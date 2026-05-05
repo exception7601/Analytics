@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: "0 0 * * *" # Every day at 00:00 UTC
   workflow_dispatch:
+    inputs:
+      version:
+        description: Firebase version to package
+        required: false
+      tag:
+        description: Release tag to create
+        required: false
 
 permissions:
   contents: write
@@ -29,6 +36,11 @@ jobs:
       - name: Make update script executable and run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.event.inputs.version }}
+          TAG: ${{ github.event.inputs.tag }}
         run: |
           chmod +x update.sh
-          ./update.sh
+          ARGS=()
+          [ -n "$VERSION" ] && ARGS+=(--version "$VERSION")
+          [ -n "$TAG" ] && ARGS+=(--tag "$TAG")
+          ./update.sh "${ARGS[@]}"
